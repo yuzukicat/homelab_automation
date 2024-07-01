@@ -8,15 +8,15 @@ BTRFS_MOUNT_OPTS="ssd,noatime,compress=zstd:1,space_cache=v2,autodefrag"
 LANG='en_US.UTF-8'
 KEYMAP='us'
 # https://wiki.archlinux.org/title/Time_zone
-TIMEZONE="US/Eastern"
+TIMEZONE="Asia/Tokyo"
 
 # zram-size option in zram-generator.conf if enabled zram.
-ZRAM_SIZE='min(ram / 2, 4 * 1024)'
+ZRAM_SIZE='min(ram, 64 * 1024)'
 
 # minimal example
-KERNEL_PKGS="linux"
-BASE_PKGS="base sudo linux-firmware iptables-nft python"
-FS_PKGS="dosfstools btrfs-progs"
+# KERNEL_PKGS="linux"
+# BASE_PKGS="base sudo linux-firmware iptables-nft python"
+# FS_PKGS="dosfstools btrfs-progs"
 #KERNEL_PARAMETERS="console=ttyS0"    # this kernel parameter force output to serial port, useful for libvirt virtual machine w/o any graphis.
 
 ## server example
@@ -26,10 +26,10 @@ FS_PKGS="dosfstools btrfs-progs"
 #OTHER_PKGS="vim"
 
 ## desktop example
-#KERNEL_PKGS="linux"
-#BASE_PKGS="base linux-firmware sudo python iptables-nft"
-#FS_PKGS="dosfstools e2fsprogs btrfs-progs"
-#OTHER_PKGS="man-db vim"
+KERNEL_PKGS="linux"
+BASE_PKGS="base linux-firmware sudo python iptables-nft"
+FS_PKGS="dosfstools e2fsprogs btrfs-progs"
+OTHER_PKGS="man-db vim"
 #OTHER_PKGS="$OTHER_PKGS git base-devel ansible"
 
 
@@ -491,7 +491,7 @@ if [[ $zram == y ]] ; then
     arch-chroot /mnt pacman --noconfirm -S zram-generator
     # Create /etc/systemd/zram-generator.conf
     if [[ -z $ZRAM_SIZE ]] ; then
-        ZRAM_SIZE='min(ram / 2, 4096)'
+        ZRAM_SIZE='min(ram, 64 * 1024)'
     fi
     echo "[zram0]"                       > /mnt/etc/systemd/zram-generator.conf
     echo "zram-size = $ZRAM_SIZE"       >> /mnt/etc/systemd/zram-generator.conf
