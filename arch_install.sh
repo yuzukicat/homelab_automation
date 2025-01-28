@@ -11,7 +11,7 @@ KEYMAP='us'
 TIMEZONE="Asia/Tokyo"
 
 ## desktop example
-KERNEL_PKGS="linux"
+KERNEL_PKGS="linux-zen"
 BASE_PKGS="base linux-firmware sudo python iptables-nft"
 FS_PKGS="dosfstools e2fsprogs btrfs-progs"
 OTHER_PKGS="man-db vim"
@@ -305,7 +305,7 @@ sed -i '/^HOOKS=/ s/block/sd-vconsole block sd-encrypt/' /mnt/etc/mkinitcpio.con
 kernel_cmd="$kernel_cmd rootfstype=btrfs rootflags=subvol=/@ rw"
 # modprobe.blacklist=pcspkr will disable PC speaker (beep) globally
 # https://wiki.archlinux.org/title/PC_speaker#Globally
-kernel_cmd="$kernel_cmd modprobe.blacklist=pcspkr $KERNEL_PARAMETERS"
+kernel_cmd="$kernel_cmd modprobe.blacklist=pcspkr $KERNEL_PARAMETERS zswap.enabled=0"
 
 
 # Fallback kernel cmdline parameters (without SELinux, VFIO)
@@ -318,21 +318,16 @@ echo "
 # https://wiki.archlinux.org/title/PCI_passthrough_via_OVMF#Enabling_IOMMU
 ######################################################
 "
-read -p "Do you want to enable IOMMU for vfio/PCI passthrough? [y/N] " vfio
-vfio="${vfio:-n}"
-vfio="${vfio,,}"
-if [[ $vfio == y ]] ; then
-    if [[ $(grep -e 'vendor_id.*GenuineIntel' /proc/cpuinfo | wc -l) -ge 1 ]] ; then
-        # for intel cpu
-        kernel_cmd="$kernel_cmd intel_iommu=on iommu=pt"
-    else
-        # amd cpu
-        kernel_cmd="$kernel_cmd iommu=pt"
-    fi
-    # load vfio-pci module early
-    # https://wiki.archlinux.org/title/PCI_passthrough_via_OVMF#mkinitcpio
-    sed -i '/^MODULES=/ s/)/ vfio_pci vfio vfio_iommu_type1)/' /mnt/etc/mkinitcpio.conf
+if [[ $(grep -e 'vendor_id.*GenuineIntel' /proc/cpuinfo | wc -l) -ge 1 ]] ; then
+    # for intel cpu
+    kernel_cmd="$kernel_cmd intel_iommu=on iommu=pt"
+else
+    # amd cpu
+    kernel_cmd="$kernel_cmd iommu=pt"
 fi
+# load vfio-pci module early
+# https://wiki.archlinux.org/title/PCI_passthrough_via_OVMF#mkinitcpio
+sed -i '/^MODULES=/ s/)/ vfio_pci vfio vfio_iommu_type1)/' /mnt/etc/mkinitcpio.conf
 
 
 echo "
@@ -415,28 +410,6 @@ fi
 
 echo "
 ######################################################
-# OpenSSH server
-# https://wiki.archlinux.org/title/OpenSSH#Server_usage
-######################################################
-"
-read -p "Do you want to enable ssh? [y/N] " enable_ssh
-enable_ssh="${enable_ssh:-n}"
-enable_ssh="${enable_ssh,,}"
-if [[ $enable_ssh == y ]] ; then
-    arch-chroot /mnt pacman --noconfirm -S --needed openssh
-    arch-chroot /mnt systemctl enable sshd.service
-    echo " Enabled sshd.service"
-    echo "ssh port? (22)"
-    read ssh_port
-    ssh_port="${ssh_port:-22}"
-    if [[ $ssh_port != 22 ]] ; then
-        sed -i "s/^#Port.*/Port ${ssh_port}/" /mnt/etc/ssh/sshd_config
-    fi
-fi
-
-
-echo "
-######################################################
 # Firewalld
 # https://wiki.archlinux.org/title/firewalld
 ######################################################
@@ -445,35 +418,6 @@ arch-chroot /mnt pacman --noconfirm -S --needed firewalld
 arch-chroot /mnt systemctl enable firewalld.service
 echo "Set default firewall zone to drop."
 arch-chroot /mnt firewall-offline-cmd --set-default-zone=drop
-if [[ $enable_ssh == y ]] ; then
-    if [[ $ssh_port != 22 ]] ; then
-        echo "modify default ssh service with new port."
-        sed "/port=/s/port=\"22\"/port=\"${ssh_port}\"/" /mnt/usr/lib/firewalld/services/ssh.xml  > /mnt/etc/firewalld/services/ssh.xml
-    fi
-    echo -e "\nssh allow source ip address (example 192.168.1.0/24) empty to allow all"
-    read ssh_source
-    if [[ -n $ssh_source ]] ; then
-        arch-chroot /mnt firewall-offline-cmd --zone=drop --add-rich-rule="rule family='ipv4' source address='${ssh_source}' service name='ssh' accept"
-    else
-        arch-chroot /mnt firewall-offline-cmd --zone=drop --add-service ssh
-    fi
-fi
-echo -e "\n"
-read -p "Allow ICMP echo-request and echo-reply (respond ping)? [Y/n] "
-allow_ping="${allow_ping:-y}"
-allow_ping="${allow_ping,,}"
-if [[ $allow_ping == y ]] ; then
-    arch-chroot /mnt firewall-offline-cmd --zone=drop --add-icmp-block-inversion
-    echo -e "\nallow ping source ip address (example 192.168.1.0/24) empty to allow all"
-    read ping_source
-    if [[ -n $ping_source ]] ; then
-        arch-chroot /mnt firewall-offline-cmd --zone=drop --add-rich-rule="rule family='ipv4' source address='${ping_source}' icmp-type name='echo-request' accept"
-        arch-chroot /mnt firewall-offline-cmd --zone=drop --add-rich-rule="rule family='ipv4' source address='${ping_source}' icmp-type name='echo-reply' accept"
-    else
-        arch-chroot /mnt firewall-offline-cmd --zone=drop --add-icmp-block=echo-request
-        arch-chroot /mnt firewall-offline-cmd --zone=drop --add-icmp-block=echo-reply
-    fi
-fi
 
 
 echo "
